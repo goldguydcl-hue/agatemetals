@@ -13,13 +13,18 @@ const MODERATOR_PRICES_KEY = 'moderatorPrices';
 const CACHE_TTL_MS = 60_000;
 const FETCH_TIMEOUT_MS = 5_000;
 
-/** Fallback reference prices seeded on install (USD per troy oz, Nov 20 2026). */
+/** Fallback reference prices seeded on install (USD per troy oz, Nov 20 2026).
+ * Rhodium $4,500 is a STALE moderator fallback carried over from the live
+ * app (late-2024 level; the Nov 20, 2026 market is ~$8,200-$9,400/ozt) —
+ * it is used ONLY until a moderator updates it or a metalpriceapi.com key
+ * adds a live rhodium leg, and the UI always labels it a reference price,
+ * never live. */
 export const SEED_MODERATOR_PRICES: ModeratorPrices = {
   gold: 3559.17,
   silver: 41.88,
   platinum: 1303.2,
   palladium: 888.25,
-  rhodium: null,
+  rhodium: 4500,
 };
 
 type CachedPrices = {

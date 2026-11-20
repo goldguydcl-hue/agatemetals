@@ -30,6 +30,8 @@ export type ShareRequest = {
   premium: number;
   estimatedValue: number;
   dealerPrice: number;
+  /** Optional title override — used when sharing a whole collection total. */
+  title?: string;
 };
 
 export type ShareResponse = {

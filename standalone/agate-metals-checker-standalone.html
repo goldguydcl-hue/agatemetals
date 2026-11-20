@@ -14,6 +14,32 @@
      (the only live source here that covers rhodium). Leave it empty to
      skip that leg — the app works fine without it.
 
+  PRESETS — the PRESETS array below is the single source of truth here:
+  the 30 live-app presets in exact order (Custom Item first), plus Joe's
+  7 additions appended after #30. Stored values ARE the live app's stored
+  values (docs/product-purity-table.json, Nov 20, 2026): for 90%/40%/35%
+  silver items the app stores the PURE-silver weight with Purity 100
+  (a pre-1965 dime is 0.0723 troy oz @ 100%, not 2.5 g @ 90%).
+  The premium slider stays 0.0% for ALL presets. Custom Item never
+  resets anything — it is manual/default mode (fresh load: Custom Item +
+  Silver, 1, Troy Oz, 99.9%, 0.0% premium).
+
+  PURITY PICKER — 24 standard purities grouped by metal (gold by karat,
+  everything else by millesimal fineness), plus a Custom option that keeps
+  the free % entry. Same table as the Devvit app.
+
+  COLLECTION — tick products in Common Products, set quantities, and add
+  them all in one tap. The collection persists in localStorage
+  (agate-metals-checker-collection-v1) and loads back on open; the
+  "Saved" indicator shows the last write.
+
+  THEME (Nov 20, 2026 — matches the original live app exactly):
+  white page, dark text, gold accents. Selected metal tab is BLACK with
+  white text; the ESTIMATED VALUE panel is PURE BLACK with a gold amount;
+  the ESTIMATED DEALER PRICE panel is white with black text; the metal
+  badge is a grey circle; the Refresh price button is pale cream with
+  gold text and a gold outline.
+
   NOTES
   - Yahoo Finance does not send CORS headers, so browsers usually block
     that leg. gold-api.com does allow browser requests, so it carries the
@@ -22,9 +48,12 @@
     that fails is skipped silently.
   - Built-in reference prices are the verified Nov 20, 2026 values. They
     only show when every live leg fails. Update them when they go stale.
-  - Rhodium has no free live source in this file: gold-api.com and Yahoo
-    Finance do not cover it. It uses metalpriceapi (if a key is set) or
-    the built-in reference price below.
+  - RHODIUM — STALE FALLBACK: no free live rhodium source exists, so the
+    app shows the moderator fallback $4,500/ozt, labelled "Reference
+    price". That is a late-2024 level; the Nov 20, 2026 market is roughly
+    $8,200–$9,400/ozt, so the app undervalues rhodium by about half
+    until a moderator updates the fallback or a metalpriceapi.com key
+    adds a live rhodium leg. The UI says so plainly — never as live.
   - All figures are estimates only — not quotes, not financial advice.
 -->
 <html lang="en">
@@ -34,38 +63,53 @@
 <title>Agate Metals Checker — What's your metal worth?</title>
 <style>
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0a1a2e; color: #fff; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #ffffff; color: #0f172a; }
   .amc { max-width: 560px; margin: 0 auto; padding: 16px; min-height: 100vh; display: flex; flex-direction: column; }
   .amc header { text-align: center; }
-  .amc .kicker { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.25em; color: #d4af37; margin: 0; }
-  .amc h1 { font-size: 1.5rem; line-height: 1.2; margin: 6px 0 0; }
-  .amc .ticker { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; padding: 8px 16px; border: 1px solid rgba(212,175,55,.4); border-radius: 999px; background: rgba(255,255,255,.05); }
-  .amc .ticker .price { font-size: 1.1rem; font-weight: 700; color: #d4af37; }
-  .amc .ticker .badge { background: #d4af37; color: #0a1a2e; border-radius: 999px; padding: 2px 8px; font-size: 0.65rem; font-weight: 700; }
-  .amc .updated { font-size: 0.72rem; color: rgba(255,255,255,.6); margin: 6px 0 0; }
-  .amc .tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; background: rgba(255,255,255,.1); border-radius: 999px; padding: 4px; margin-top: 20px; }
-  .amc .tabs button { cursor: pointer; border: 0; border-radius: 999px; padding: 8px 2px; font-size: 0.8rem; font-weight: 600; background: transparent; color: rgba(255,255,255,.8); }
-  .amc .tabs button.active { background: #d4af37; color: #0a1a2e; }
-  .amc .card { background: #fff; color: #0a1a2e; border-radius: 16px; padding: 16px; margin-top: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+  .amc .kicker { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.25em; color: #64748b; margin: 0; }
+  .amc h1 { font-size: 1.5rem; line-height: 1.2; margin: 6px 0 0; color: #0a1a2e; }
+  .amc .ticker { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .amc .badge { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 999px; background: #e2e8f0; color: #334155; font-size: 0.85rem; font-weight: 700; }
+  .amc .ticker .price { font-size: 1.1rem; font-weight: 700; color: #a07c1a; }
+  .amc .ticker .pill { border-radius: 999px; padding: 2px 8px; font-size: 0.65rem; font-weight: 700; }
+  .amc .ticker .pill.live { background: #d4af37; color: #0a1a2e; }
+  .amc .ticker .pill.ref { background: #e2e8f0; color: #334155; }
+  .amc .ticker .pill.none { background: #fee2e2; color: #b91c1c; }
+  .amc .updated { font-size: 0.72rem; color: #64748b; margin: 6px 0 0; }
+  .amc .refresh { cursor: pointer; margin-top: 8px; background: #fffbeb; color: #a07c1a; border: 1px solid #d4af37; border-radius: 999px; padding: 6px 16px; font-size: 0.85rem; font-weight: 700; }
+  .amc .refresh:disabled { opacity: .5; cursor: default; }
+  .amc .rh-note { max-width: 480px; margin: 12px auto 0; border: 1px solid #fcd34d; background: #fffbeb; border-radius: 8px; padding: 8px 12px; font-size: 0.75rem; line-height: 1.5; color: #92400e; text-align: left; }
+  .amc .tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; background: #fff; border: 1px solid #e2e8f0; border-radius: 999px; padding: 4px; margin-top: 20px; }
+  .amc .tabs button { cursor: pointer; border: 0; border-radius: 999px; padding: 8px 2px; font-size: 0.8rem; font-weight: 600; background: #fff; color: #334155; }
+  .amc .tabs button.active { background: #000; color: #fff; }
+  .amc .card { background: #fff; color: #0a1a2e; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; margin-top: 16px; box-shadow: 0 4px 16px rgba(15,23,42,.08); }
   .amc .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .amc label { display: block; }
   .amc .lbl { font-size: 0.72rem; font-weight: 700; letter-spacing: .05em; color: #64748b; }
-  .amc input[type="number"] { width: 100%; margin-top: 4px; padding: 8px 12px; font-size: 1.1rem; font-weight: 600; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; }
-  .amc input[type="number"]:focus { border-color: #d4af37; }
+  .amc input[type="number"] { width: 100%; margin-top: 4px; padding: 8px 12px; font-size: 1.1rem; font-weight: 600; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; background: #fff; color: #000; }
+  .amc input[type="number"]:focus { border-color: #d4af37; box-shadow: 0 0 0 2px rgba(212,175,55,.4); }
+  .amc select { width: 100%; margin-top: 4px; padding: 8px 12px; font-size: 1rem; font-weight: 600; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; background: #fff; color: #000; cursor: pointer; }
+  .amc select:focus { border-color: #d4af37; box-shadow: 0 0 0 2px rgba(212,175,55,.4); }
   .amc .unit { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: #f1f5f9; border-radius: 8px; padding: 4px; margin-top: 4px; }
   .amc .unit button { cursor: pointer; border: 0; border-radius: 6px; padding: 8px 4px; font-size: 0.85rem; font-weight: 600; background: transparent; color: #475569; }
-  .amc .unit button.active { background: #0a1a2e; color: #fff; }
+  .amc .unit button.active { background: #000; color: #fff; }
   .amc .field { margin-top: 12px; }
-  .amc input[type="range"] { width: 100%; accent-color: #d4af37; }
+  .amc input[type="range"] { width: 100%; margin-top: 8px; accent-color: #d4af37; appearance: none; -webkit-appearance: none; height: 6px; border-radius: 999px; background: #475569; outline: none; }
+  .amc input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 999px; background: #d4af37; border: 2px solid #0a1a2e; cursor: pointer; }
+  .amc input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 999px; background: #d4af37; border: 2px solid #0a1a2e; cursor: pointer; }
+  .amc input[type="range"]::-moz-range-track { height: 6px; border-radius: 999px; background: #475569; }
   .amc .range-lbl { display: flex; justify-content: space-between; font-size: 0.72rem; font-weight: 700; letter-spacing: .05em; color: #64748b; }
   .amc .range-lbl b { color: #0a1a2e; }
   .amc .range-minmax { display: flex; justify-content: space-between; font-size: 0.7rem; color: #94a3b8; }
-  .amc .result { background: #0a1a2e; color: #fff; border-radius: 12px; padding: 16px; text-align: center; margin-top: 16px; }
-  .amc .result .cap { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2em; color: #d4af37; }
-  .amc .result .big { font-size: 1.9rem; font-weight: 700; margin-top: 4px; }
-  .amc .result .cap2 { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2em; color: rgba(255,255,255,.6); margin-top: 10px; }
-  .amc .result .dealer { font-size: 1.25rem; font-weight: 600; color: #d4af37; }
-  .amc .result .note { font-size: 0.7rem; color: rgba(255,255,255,.6); margin: 8px 0 0; }
+  .amc .value-panel { background: #000; color: #fff; border-radius: 12px; padding: 16px; text-align: center; margin-top: 16px; }
+  .amc .value-panel .cap { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2em; color: #fff; }
+  .amc .value-panel .big { font-size: 1.9rem; font-weight: 700; margin-top: 4px; color: #d4af37; }
+  .amc .value-panel .fine { font-size: 0.75rem; color: rgba(255,255,255,.6); margin: 4px 0 0; }
+  .amc .value-panel .note { font-size: 0.7rem; color: rgba(255,255,255,.6); margin: 8px 0 0; }
+  .amc .dealer-panel { background: #fff; color: #0a1a2e; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; text-align: center; margin-top: 12px; }
+  .amc .dealer-panel .cap { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2em; color: #64748b; }
+  .amc .dealer-panel .amt { font-size: 1.25rem; font-weight: 700; margin-top: 4px; color: #000; }
+  .amc .dealer-panel .note { font-size: 0.7rem; color: #64748b; margin: 4px 0 0; }
   .amc .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
   .amc .actions button { cursor: pointer; border-radius: 999px; padding: 10px 12px; font-size: 0.85rem; font-weight: 700; }
   .amc .actions .gold { background: #d4af37; color: #0a1a2e; border: 0; }
@@ -73,17 +117,36 @@
   .amc .actions button:disabled { opacity: .5; cursor: default; }
   .amc .copy { width: 100%; margin-top: 8px; background: none; border: 0; cursor: pointer; color: #64748b; font-size: 0.85rem; font-weight: 600; text-decoration: underline; }
   .amc .copy:disabled { opacity: .5; cursor: default; }
-  .amc .collection { background: #fff; color: #0a1a2e; border-radius: 16px; padding: 16px; margin-top: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
-  .amc .collection h2 { font-size: 0.85rem; letter-spacing: .05em; margin: 0; }
+  .amc .section { background: #fff; color: #0a1a2e; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; margin-top: 16px; box-shadow: 0 4px 16px rgba(15,23,42,.08); }
+  .amc .section h2 { font-size: 0.85rem; letter-spacing: .05em; margin: 0; }
+  .amc .section .hint { font-size: 0.75rem; color: #64748b; margin: 4px 0 0; }
+  .amc .section h3 { font-size: 0.72rem; letter-spacing: .05em; color: #94a3b8; margin: 12px 0 0; }
+  .amc .plist { list-style: none; margin: 4px 0 0; padding: 0; }
+  .amc .plist li { display: flex; align-items: center; gap: 8px; background: #f1f5f9; border-radius: 8px; padding: 6px 8px; font-size: 0.85rem; margin-top: 4px; }
+  .amc .plist li input[type="checkbox"] { width: 16px; height: 16px; flex-shrink: 0; cursor: pointer; accent-color: #d4af37; }
+  .amc .plist .pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: none; border: 0; padding: 0; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: #0a1a2e; text-align: left; }
+  .amc .plist .pname:hover { text-decoration: underline; }
+  .amc .plist .pval { flex-shrink: 0; font-weight: 700; }
+  .amc .plist .step { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .amc .plist .step button { cursor: pointer; border: 0; border-radius: 999px; background: #cbd5e1; padding: 2px 8px; font-weight: 700; }
+  .amc .plist .step span { width: 24px; text-align: center; font-weight: 700; }
+  .amc .goldbtn { width: 100%; margin-top: 12px; cursor: pointer; border: 0; border-radius: 999px; background: #d4af37; color: #0a1a2e; padding: 10px 12px; font-size: 0.85rem; font-weight: 700; }
+  .amc .goldbtn:disabled { opacity: .5; cursor: default; }
   .amc .collection ul { list-style: none; margin: 8px 0 0; padding: 0; }
-  .amc .collection li { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #f1f5f9; border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; margin-top: 8px; }
-  .amc .collection li b { white-space: nowrap; }
-  .amc .collection li button { cursor: pointer; border: 0; border-radius: 999px; background: #cbd5e1; padding: 2px 8px; font-weight: 700; }
+  .amc .collection li { background: #f1f5f9; border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; margin-top: 8px; }
+  .amc .collection li .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .amc .collection li .top b { white-space: nowrap; }
+  .amc .collection li .top button { cursor: pointer; border: 0; border-radius: 999px; background: #cbd5e1; padding: 2px 8px; font-weight: 700; }
+  .amc .collection li .sub { display: flex; justify-content: space-between; gap: 8px; font-size: 0.75rem; color: #64748b; margin-top: 2px; }
   .amc .collection .total { display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; margin-top: 12px; padding-top: 8px; font-weight: 700; }
+  .amc .collection .total2 { display: flex; justify-content: space-between; margin-top: 4px; font-size: 0.85rem; font-weight: 600; color: #475569; }
+  .amc .collection .saved { font-size: 0.75rem; font-weight: 600; color: #64748b; }
+  .amc .collection .saved.ok { color: #15803d; }
+  .amc .collection .saved.warn { color: #b45309; }
   .amc .error { margin-top: 16px; border: 1px solid rgba(248,113,113,.5); background: rgba(239,68,68,.1); border-radius: 12px; padding: 16px; text-align: center; }
   .amc .error button { cursor: pointer; margin-top: 12px; background: #d4af37; color: #0a1a2e; border: 0; border-radius: 999px; padding: 8px 16px; font-weight: 700; }
-  .amc footer { margin-top: 20px; padding-bottom: 8px; text-align: center; font-size: 0.72rem; line-height: 1.6; color: rgba(255,255,255,.6); }
-  .amc footer a { color: rgba(255,255,255,.8); }
+  .amc footer { margin-top: 20px; padding-bottom: 8px; text-align: center; font-size: 0.72rem; line-height: 1.6; color: #64748b; }
+  .amc footer a { color: #a07c1a; }
   .amc .skeleton { height: 40px; border-radius: 8px; background: #e2e8f0; animation: amc-pulse 1.2s ease-in-out infinite; margin-top: 12px; }
   @keyframes amc-pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
 </style>
@@ -93,8 +156,12 @@
   <header>
     <p class="kicker">AGATE METALS • LIVE REFERENCE</p>
     <h1>Know what your bullion is worth</h1>
-    <div class="ticker"><span class="price" id="amc-header-price">Loading live prices…</span><span class="badge" id="amc-header-source">…</span></div>
+    <div class="ticker">
+      <span class="badge" id="amc-badge">…</span><span class="price" id="amc-header-price">Loading live prices…</span><span class="pill live" id="amc-header-source">…</span>
+    </div>
     <p class="updated" id="amc-updated">Updated — • Refreshes every 60 seconds</p>
+    <button class="refresh" id="amc-refresh" type="button">Refresh price</button>
+    <p class="rh-note" id="amc-rh-note" hidden>Reference price: the rhodium fallback ($4,500/ozt) is stale — the market is roughly $8,200–$9,400/ozt — so this value is about half the real market. Ask a moderator to update the reference price.</p>
   </header>
 
   <nav class="tabs" id="amc-tabs" aria-label="Metal"></nav>
@@ -110,7 +177,10 @@
       <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
     </div>
     <div id="amc-form" hidden>
-      <div class="row">
+      <label><span class="lbl">PRODUCT</span>
+        <select id="amc-preset"></select>
+      </label>
+      <div class="row" style="margin-top:12px">
         <label><span class="lbl">WEIGHT</span>
           <input type="number" id="amc-weight" min="0" step="any" value="1" inputmode="decimal" />
         </label>
@@ -121,9 +191,12 @@
           </div>
         </div>
       </div>
-      <div class="field">
+      <div class="row" style="margin-top:12px">
         <label><span class="lbl">PURITY %</span>
-          <input type="number" id="amc-purity" min="0" max="100" step="0.1" value="99.9" inputmode="decimal" />
+          <input type="number" id="amc-purity" min="0" max="100" step="0.01" value="99.9" inputmode="decimal" />
+        </label>
+        <label><span class="lbl">PURITY PICKER</span>
+          <select id="amc-picker"></select>
         </label>
       </div>
       <div class="field">
@@ -131,12 +204,16 @@
         <input type="range" id="amc-premium" min="0" max="50" step="0.5" value="0" />
         <div class="range-minmax"><span>0% (melt value)</span><span>50%</span></div>
       </div>
-      <div class="result">
+      <div class="value-panel">
         <p class="cap" style="margin:0">ESTIMATED VALUE</p>
         <p class="big" id="amc-value" style="margin:4px 0 0">—</p>
-        <p class="cap2" style="margin:10px 0 0">ESTIMATED DEALER PRICE (95%)</p>
-        <p class="dealer" id="amc-dealer" style="margin:0">—</p>
+        <p class="fine" id="amc-fine">—</p>
         <p class="note" id="amc-note"></p>
+      </div>
+      <div class="dealer-panel">
+        <p class="cap" style="margin:0">ESTIMATED DEALER PRICE (95%)</p>
+        <p class="amt" id="amc-dealer" style="margin:4px 0 0">—</p>
+        <p class="note">Reference at 95% of calculated metal value</p>
       </div>
       <div class="actions">
         <button type="button" class="gold" id="amc-add">+ Add to collection</button>
@@ -145,10 +222,25 @@
     </div>
   </section>
 
-  <section class="collection" id="amc-collection" hidden>
-    <h2>MY COLLECTION</h2>
+  <section class="section" id="amc-common">
+    <h2>COMMON PRODUCTS</h2>
+    <p class="hint">Tick products and add them all at once. Tap a product name to fill in the calculator instead.</p>
+    <div id="amc-groups"></div>
+    <button type="button" class="goldbtn" id="amc-add-selected" disabled>Add selected to my collection</button>
+  </section>
+
+  <section class="section collection" id="amc-collection">
+    <h2 style="display:flex;justify-content:space-between;align-items:center">MY COLLECTION <span class="saved" id="amc-saved"></span></h2>
+    <p class="hint" id="amc-empty">No items yet — tick products in Common Products above, or add the calculator result.</p>
     <ul id="amc-items"></ul>
-    <p class="total"><span>Collection total</span><span id="amc-total"></span></p>
+    <div id="amc-totals" hidden>
+      <p class="total"><span>Collection total</span><span id="amc-total"></span></p>
+      <p class="total2"><span>Total dealer price (95%)</span><span id="amc-total-dealer"></span></p>
+      <div class="actions">
+        <button type="button" class="outline" id="amc-copy-collection">Copy collection summary</button>
+        <button type="button" class="gold" id="amc-clear" style="border:0">Clear all</button>
+      </div>
+    </div>
   </section>
 
   <footer>
@@ -171,35 +263,132 @@
 
   var TROY_OZ_GRAMS = 31.1034768;
   var DEALER_FACTOR = 0.95;
+  var STORAGE_KEY = 'agate-metals-checker-collection-v1';
 
   // Built-in reference prices (USD per troy oz), verified Nov 20, 2026.
   // Used ONLY when every live leg fails. Update them when they go stale.
+  // RHODIUM $4,500 is a STALE moderator fallback (late-2024 level; the
+  // Nov 20, 2026 market is ~$8,200-$9,400/ozt). It is used ONLY until a
+  // moderator updates it or a metalpriceapi.com key adds a live leg, and
+  // the UI always labels it a reference price, never live.
   var REFERENCE_PRICES = {
     gold: 3559.17,
     silver: 41.88,
     platinum: 1303.20,
     palladium: 888.25,
-    rhodium: null
+    rhodium: 4500
   };
 
   var METALS = [
-    { key: 'silver', label: 'Silver', code: 'XAG', yahoo: 'SI=F' },
-    { key: 'gold', label: 'Gold', code: 'XAU', yahoo: 'GC=F' },
-    { key: 'platinum', label: 'Platinum', code: 'XPT', yahoo: 'PL=F' },
-    { key: 'palladium', label: 'Palladium', code: 'XPD', yahoo: 'PA=F' },
-    { key: 'rhodium', label: 'Rhodium', code: 'XRH', yahoo: null }
+    { key: 'silver', label: 'Silver', code: 'XAG', yahoo: 'SI=F', ticker: 'Ag' },
+    { key: 'gold', label: 'Gold', code: 'XAU', yahoo: 'GC=F', ticker: 'Au' },
+    { key: 'platinum', label: 'Platinum', code: 'XPT', yahoo: 'PL=F', ticker: 'Pt' },
+    { key: 'palladium', label: 'Palladium', code: 'XPD', yahoo: 'PA=F', ticker: 'Pd' },
+    { key: 'rhodium', label: 'Rhodium', code: 'XRH', yahoo: null, ticker: 'Rh' }
+  ];
+
+  // THE preset table — one place to edit. The stored values ARE the live
+  // app's stored values (docs/product-purity-table.json, Nov 20, 2026):
+  // 90%/40%/35% silver items store the PURE-silver weight at 100% purity.
+  // Order: the live 30 in exact order, then Joe's 7 additions.
+  var PRESETS = [
+    { id: 'custom-item', name: 'Custom Item', group: null, metal: 'silver', weight: 1, unit: 'oz', purity: 99.9 },
+    { id: 'silver-eagle', name: '1 oz Silver Eagle', group: 'Silver bullion', metal: 'silver', weight: 1, unit: 'oz', purity: 99.9 },
+    { id: 'silver-maple', name: '1 oz Silver Maple Leaf', group: 'Silver bullion', metal: 'silver', weight: 1, unit: 'oz', purity: 99.99 },
+    { id: 'silver-britannia', name: '1 oz Silver Britannia', group: 'Silver bullion', metal: 'silver', weight: 1, unit: 'oz', purity: 99.9 },
+    { id: 'silver-round', name: '1 oz Silver Round', group: 'Silver bullion', metal: 'silver', weight: 1, unit: 'oz', purity: 99.9 },
+    { id: 'silver-bar-10oz', name: '10 oz Silver Bar', group: 'Silver bullion', metal: 'silver', weight: 10, unit: 'oz', purity: 99.9 },
+    { id: 'silver-bar-5oz', name: '5 oz Silver Bar', group: 'Silver bullion', metal: 'silver', weight: 5, unit: 'oz', purity: 99.9 },
+    { id: 'silver-bar-100oz', name: '100 oz Silver Bar', group: 'Silver bullion', metal: 'silver', weight: 100, unit: 'oz', purity: 99.9 },
+    { id: 'dime-90', name: 'Pre-1965 Silver Dime', group: 'Junk silver', metal: 'silver', weight: 0.0723, unit: 'oz', purity: 100 },
+    { id: 'quarter-90', name: 'Pre-1965 Silver Quarter', group: 'Junk silver', metal: 'silver', weight: 0.1808, unit: 'oz', purity: 100 },
+    { id: 'half-90', name: 'Pre-1965 Silver Half Dollar', group: 'Junk silver', metal: 'silver', weight: 0.3617, unit: 'oz', purity: 100 },
+    { id: 'face-1', name: '$1 Face Value 90% Silver', group: 'Junk silver', metal: 'silver', weight: 0.715, unit: 'oz', purity: 100 },
+    { id: 'gold-eagle', name: '1 oz Gold Eagle', group: 'Gold bullion', metal: 'gold', weight: 33.931, unit: 'g', purity: 91.67 },
+    { id: 'gold-buffalo', name: '1 oz Gold Buffalo', group: 'Gold bullion', metal: 'gold', weight: 1, unit: 'oz', purity: 99.99 },
+    { id: 'gold-maple', name: '1 oz .9999 Gold Maple Leaf', group: 'Gold bullion', metal: 'gold', weight: 1, unit: 'oz', purity: 99.99 },
+    { id: 'gold-bar-1oz', name: '1 oz Gold Bar', group: 'Gold bullion', metal: 'gold', weight: 1, unit: 'oz', purity: 99.99 },
+    { id: 'gold-coin-half', name: '1/2 oz Gold Coin', group: 'Gold bullion', metal: 'gold', weight: 16.966, unit: 'g', purity: 91.67 },
+    { id: 'gold-coin-quarter', name: '1/4 oz Gold Coin', group: 'Gold bullion', metal: 'gold', weight: 8.483, unit: 'g', purity: 91.67 },
+    { id: 'gold-coin-tenth', name: '1/10 oz Gold Coin', group: 'Gold bullion', metal: 'gold', weight: 3.393, unit: 'g', purity: 91.67 },
+    { id: 'gold-bar-half-gram', name: '1/2 Gram Gold Bar', group: 'Gold bullion', metal: 'gold', weight: 0.5, unit: 'g', purity: 99.99 },
+    { id: 'gold-bar-1g', name: '1 Gram Gold Bar', group: 'Gold bullion', metal: 'gold', weight: 1, unit: 'g', purity: 99.99 },
+    { id: 'gold-bar-2-5g', name: '2.5 Gram Gold Bar', group: 'Gold bullion', metal: 'gold', weight: 2.5, unit: 'g', purity: 99.99 },
+    { id: 'gold-bar-5g', name: '5 Gram Gold Bar', group: 'Gold bullion', metal: 'gold', weight: 5, unit: 'g', purity: 99.99 },
+    { id: 'gold-bar-10g', name: '10 Gram Gold Bar', group: 'Gold bullion', metal: 'gold', weight: 10, unit: 'g', purity: 99.99 },
+    { id: 'platinum-eagle', name: '1 oz Platinum Eagle', group: 'Platinum', metal: 'platinum', weight: 1, unit: 'oz', purity: 99.95 },
+    { id: 'platinum-bar', name: '1 oz Platinum Bar', group: 'Platinum', metal: 'platinum', weight: 1, unit: 'oz', purity: 99.95 },
+    { id: 'platinum-coin-half', name: '1/2 oz Platinum Coin', group: 'Platinum', metal: 'platinum', weight: 0.5, unit: 'oz', purity: 99.95 },
+    { id: 'palladium-eagle', name: '1 oz Palladium Eagle', group: 'Palladium', metal: 'palladium', weight: 1, unit: 'oz', purity: 99.95 },
+    { id: 'palladium-bar', name: '1 oz Palladium Bar', group: 'Palladium', metal: 'palladium', weight: 1, unit: 'oz', purity: 99.95 },
+    { id: 'rhodium-bar', name: '1 oz Rhodium Bar', group: 'Rhodium', metal: 'rhodium', weight: 1, unit: 'oz', purity: 99.9 },
+    { id: 'gold-10k', name: '10k Gold', group: 'Karat gold', metal: 'gold', weight: 1, unit: 'g', purity: 41.67 },
+    { id: 'gold-14k', name: '14k Gold', group: 'Karat gold', metal: 'gold', weight: 1, unit: 'g', purity: 58.33 },
+    { id: 'gold-18k', name: '18k Gold', group: 'Karat gold', metal: 'gold', weight: 1, unit: 'g', purity: 75 },
+    { id: 'gold-24k', name: '24k Gold', group: 'Karat gold', metal: 'gold', weight: 1, unit: 'g', purity: 99.99 },
+    { id: 'kennedy-40', name: '40% Kennedy Half Dollar', group: 'Junk silver', metal: 'silver', weight: 0.1479, unit: 'oz', purity: 100 },
+    { id: 'war-nickel', name: '35% War Nickel', group: 'Junk silver', metal: 'silver', weight: 0.0563, unit: 'oz', purity: 100 },
+    { id: 'face-10', name: '$10 Face Value 90% Silver', group: 'Junk silver', metal: 'silver', weight: 7.15, unit: 'oz', purity: 100 }
+  ];
+
+  var PRESET_GROUP_ORDER = ['Silver bullion', 'Junk silver', 'Gold bullion', 'Karat gold', 'Platinum', 'Palladium', 'Rhodium'];
+
+  // The purity picker — 24 standard purities grouped by metal. Same table
+  // as the Devvit app (docs/product-purity-table.json). 99.9% (.999) and
+  // 99.99% (.9999) are distinct options; 100% is the live app's
+  // pure-weight convention for junk silver.
+  var PURITY_GROUPS = [
+    { label: 'Gold', options: [
+      { metal: 'gold', label: '24k', name: '24 karat / pure gold', purity: 99.99 },
+      { metal: 'gold', label: '22k', name: '22 karat', purity: 91.67 },
+      { metal: 'gold', label: '18k', name: '18 karat', purity: 75 },
+      { metal: 'gold', label: '14k', name: '14 karat', purity: 58.33 },
+      { metal: 'gold', label: '10k', name: '10 karat', purity: 41.67 },
+      { metal: 'gold', label: '9k', name: '9 karat', purity: 37.5 }
+    ] },
+    { label: 'Silver', options: [
+      { metal: 'silver', label: '.9999', name: 'Four nines fine', purity: 99.99 },
+      { metal: 'silver', label: '.999', name: 'Fine silver / three nines', purity: 99.9 },
+      { metal: 'silver', label: '.958', name: 'Britannia silver', purity: 95.8 },
+      { metal: 'silver', label: '.925', name: 'Sterling silver', purity: 92.5 },
+      { metal: 'silver', label: '.900', name: 'Coin silver / 90% silver', purity: 90 },
+      { metal: 'silver', label: '.835', name: '835 silver', purity: 83.5 },
+      { metal: 'silver', label: '.800', name: '800 silver', purity: 80 },
+      { metal: 'silver', label: '.500', name: '500 silver', purity: 50 },
+      { metal: 'silver', label: '.400', name: '40% silver', purity: 40 },
+      { metal: 'silver', label: '.350', name: '35% silver / war nickel', purity: 35 }
+    ] },
+    { label: 'Platinum', options: [
+      { metal: 'platinum', label: '.9995', name: 'Platinum bullion', purity: 99.95 },
+      { metal: 'platinum', label: '.950', name: '950 platinum', purity: 95 },
+      { metal: 'platinum', label: '.900', name: '900 platinum', purity: 90 },
+      { metal: 'platinum', label: '.850', name: '850 platinum', purity: 85 }
+    ] },
+    { label: 'Palladium', options: [
+      { metal: 'palladium', label: '.9995', name: 'Palladium bullion', purity: 99.95 },
+      { metal: 'palladium', label: '.950', name: '950 palladium', purity: 95 }
+    ] },
+    { label: 'Rhodium', options: [
+      { metal: 'rhodium', label: '.999', name: 'Rhodium bullion', purity: 99.9 }
+    ] },
+    { label: 'Pure weight', options: [
+      { metal: 'any', label: '100%', name: 'Pure-weight convention (junk silver)', purity: 100 }
+    ] }
   ];
 
   var state = {
-    metal: 'gold',
+    metal: 'silver',
     unit: 'oz',
     premium: 0,
+    presetId: 'custom-item',
     prices: null, // { key: { price, source, updatedAt } }
     fetchedAt: null,
     loading: true,
     error: false,
     collection: [],
-    nextId: 1
+    nextId: 1,
+    ticks: {}, // presetId -> true
+    qty: {} // presetId -> number
   };
 
   function $(id) { return document.getElementById(id); }
@@ -207,6 +396,31 @@
   function fmtUsd(v) {
     return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
+
+  function fmtPurity(p) { return (Math.round(p * 100) / 100).toString(); }
+
+  function findPreset(id) {
+    for (var i = 0; i < PRESETS.length; i++) {
+      if (PRESETS[i].id === id) { return PRESETS[i]; }
+    }
+    return null;
+  }
+
+  function findPurityOption(metal, purity) {
+    var fallback = null;
+    for (var g = 0; g < PURITY_GROUPS.length; g++) {
+      var opts = PURITY_GROUPS[g].options;
+      for (var i = 0; i < opts.length; i++) {
+        if (Math.abs(opts[i].purity - purity) < 0.0001) {
+          if (opts[i].metal === metal || opts[i].metal === 'any') { return opts[i]; }
+          if (!fallback) { fallback = opts[i]; }
+        }
+      }
+    }
+    return fallback;
+  }
+
+  function purityKey(opt) { return opt.metal + ':' + opt.purity; }
 
   function fetchJson(url, timeoutMs) {
     return new Promise(function (resolve) {
@@ -252,8 +466,6 @@
   }
 
   // Price chain per metal: gold-api → Yahoo → metalpriceapi (if key) → built-in reference.
-  // (Yahoo usually fails in browsers because it sends no CORS headers; the
-  // chain keeps the documented order and skips any leg that fails.)
   function loadPrices() {
     return metalPriceApiPrices().then(function (mpa) {
       var jobs = METALS.map(function (m) {
@@ -294,6 +506,16 @@
 
   function toTroyOz(weight, unit) { return unit === 'g' ? weight / TROY_OZ_GRAMS : weight; }
 
+  function estimate(price, weight, unit, purity, premium) {
+    return price * toTroyOz(weight, unit) * (purity / 100) * (1 + premium / 100);
+  }
+
+  function priceFor(metal) {
+    if (!state.prices) { return null; }
+    var entry = state.prices[metal];
+    return entry ? entry.price : null;
+  }
+
   function currentValue() {
     if (!state.prices) { return null; }
     var entry = state.prices[state.metal];
@@ -301,25 +523,126 @@
     var w = parseFloat($('amc-weight').value);
     var p = parseFloat($('amc-purity').value);
     if (!isFinite(w) || w <= 0 || !isFinite(p) || p <= 0 || p > 100) { return null; }
-    return entry.price * toTroyOz(w, state.unit) * (p / 100) * (1 + state.premium / 100);
+    return estimate(entry.price, w, state.unit, p, state.premium);
   }
 
+  function metalLabel(key) {
+    return { silver: 'Silver', gold: 'Gold', platinum: 'Platinum', palladium: 'Palladium', rhodium: 'Rhodium' }[key];
+  }
+
+  function metalTicker(key) {
+    return { silver: 'Ag', gold: 'Au', platinum: 'Pt', palladium: 'Pd', rhodium: 'Rh' }[key];
+  }
+
+  // ---- persistence (localStorage) ----
+  function loadCollection() {
+    try {
+      var raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) { return; }
+      var data = JSON.parse(raw);
+      if (!Array.isArray(data)) { return; }
+      var ok = data.every(function (x) {
+        return x && typeof x.id === 'string' && typeof x.name === 'string' &&
+          typeof x.weight === 'number' && x.weight > 0 &&
+          (x.unit === 'oz' || x.unit === 'g') &&
+          typeof x.purity === 'number' && x.purity > 0 && x.purity <= 100 &&
+          typeof x.quantity === 'number' && x.quantity >= 1 &&
+          typeof x.unitValueSnapshot === 'number';
+      });
+      if (!ok) { return; }
+      state.collection = data;
+      var maxId = 0;
+      data.forEach(function (x) {
+        var m = /^n(\d+)$/.exec(x.id);
+        if (m) { maxId = Math.max(maxId, parseInt(m[1], 10)); }
+      });
+      state.nextId = maxId + 1;
+      setSaved('✓ Saved');
+    } catch (e) { /* corrupted storage: start empty */ }
+  }
+
+  function saveCollection() {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.collection));
+      setSaved('✓ Saved');
+    } catch (e) {
+      setSaved('Couldn’t save in this browser');
+      $('amc-saved').classList.add('warn');
+    }
+  }
+
+  function setSaved(text) {
+    var el = $('amc-saved');
+    el.textContent = text;
+    el.classList.toggle('ok', text === '✓ Saved');
+    el.classList.toggle('warn', text !== '✓ Saved' && text !== '');
+  }
+
+  // ---- presets / picker ----
+  function markManual() {
+    state.presetId = 'custom-item';
+    $('amc-preset').value = 'custom-item';
+  }
+
+  function applyPreset(preset) {
+    state.presetId = preset.id;
+    $('amc-preset').value = preset.id;
+    if (preset.id === 'custom-item') {
+      // Custom Item does NOT reset anything — manual/default mode only.
+      render();
+      return;
+    }
+    state.metal = preset.metal;
+    $('amc-weight').value = String(preset.weight);
+    $('amc-purity').value = fmtPurity(preset.purity);
+    setUnit(preset.unit);
+    state.premium = 0;
+    $('amc-premium').value = '0';
+    $('amc-premium-val').textContent = '0.0%';
+    render();
+  }
+
+  function setUnit(unit) {
+    state.unit = unit;
+    $('amc-unit-oz').classList.toggle('active', unit === 'oz');
+    $('amc-unit-g').classList.toggle('active', unit === 'g');
+  }
+
+  function lineValue(line) {
+    var spot = priceFor(line.metal);
+    if (spot === null) { return line.unitValueSnapshot * line.quantity; }
+    return estimate(spot, line.weight, line.unit, line.purity, line.premium) * line.quantity;
+  }
+
+  function linePureOz(line) {
+    return toTroyOz(line.weight, line.unit) * (line.purity / 100) * line.quantity;
+  }
+
+  // ---- rendering ----
   function render() {
     var entry = state.prices ? state.prices[state.metal] : null;
+    var badge = $('amc-badge');
     var headerPrice = $('amc-header-price');
     var headerSource = $('amc-header-source');
+    badge.textContent = state.loading && !state.prices ? '…' : metalTicker(state.metal);
     if (state.loading && !state.prices) {
       headerPrice.textContent = 'Loading live prices…';
       headerSource.textContent = '…';
+      headerSource.className = 'pill live';
     } else if (entry && entry.price !== null) {
-      var label = { silver: 'Silver', gold: 'Gold', platinum: 'Platinum', palladium: 'Palladium', rhodium: 'Rhodium' }[state.metal];
-      headerPrice.textContent = label + ' ' + fmtUsd(entry.price) + ' / oz';
-      headerSource.textContent = entry.source === 'reference' ? 'Reference price' : 'Live';
+      headerPrice.textContent = metalLabel(state.metal) + ' ' + fmtUsd(entry.price) + ' / oz';
+      var isRef = entry.source === 'reference' || entry.source === 'moderator';
+      headerSource.textContent = isRef ? 'Reference price' : 'Live';
+      headerSource.className = 'pill ' + (isRef ? 'ref' : 'live');
     } else {
-      headerPrice.textContent = { silver: 'Silver', gold: 'Gold', platinum: 'Platinum', palladium: 'Palladium', rhodium: 'Rhodium' }[state.metal] + ' — no live price';
+      headerPrice.textContent = metalLabel(state.metal) + ' — no live price';
       headerSource.textContent = 'Unavailable';
+      headerSource.className = 'pill none';
     }
     $('amc-updated').textContent = 'Updated ' + (state.fetchedAt ? new Date(state.fetchedAt).toLocaleTimeString('en-US', { hour12: false }) : '—') + ' • Refreshes every 60 seconds';
+    $('amc-refresh').disabled = state.loading;
+    $('amc-refresh').textContent = state.loading ? 'Refreshing…' : 'Refresh price';
+    $('amc-rh-note').hidden = !(state.metal === 'rhodium' && entry && (entry.source === 'reference' || entry.source === 'moderator'));
 
     $('amc-error').hidden = !(state.error && !state.prices);
     $('amc-loading').hidden = !(state.loading && !state.prices);
@@ -328,8 +651,13 @@
     var value = currentValue();
     $('amc-value').textContent = value === null ? '—' : fmtUsd(value);
     $('amc-dealer').textContent = value === null ? '—' : fmtUsd(value * DEALER_FACTOR);
+    var w = parseFloat($('amc-weight').value);
+    var p = parseFloat($('amc-purity').value);
+    $('amc-fine').textContent = (value === null || !isFinite(w) || !isFinite(p))
+      ? '—'
+      : (toTroyOz(w, state.unit) * (p / 100)).toFixed(4) + ' fine ozt';
     var note = '';
-    if (entry && entry.source === 'reference') {
+    if (entry && (entry.source === 'reference' || entry.source === 'moderator')) {
       note = 'Showing a built-in reference price — live sources are unavailable right now.';
     } else if (entry && entry.price === null) {
       note = 'No live price for this metal right now — a reference price has not been set.';
@@ -338,77 +666,265 @@
     $('amc-add').disabled = value === null;
     $('amc-copy').disabled = value === null;
 
+    // Purity picker reflects the current % (Custom when it matches nothing).
+    var picker = $('amc-picker');
+    var match = (isFinite(p) && p > 0 && p <= 100) ? findPurityOption(state.metal, p) : null;
+    picker.value = match ? purityKey(match) : 'custom';
+
     var tabs = $('amc-tabs');
-    if (!tabs.hasChildNodes()) {
-      METALS.forEach(function (m) {
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.textContent = m.label;
-        b.dataset.metal = m.key;
-        b.addEventListener('click', function () { state.metal = m.key; render(); });
-        tabs.appendChild(b);
-      });
-    }
     Array.prototype.forEach.call(tabs.children, function (b) {
       b.classList.toggle('active', b.dataset.metal === state.metal);
     });
 
+    renderGroups();
+    renderCollection();
+  }
+
+  function renderGroups() {
+    var host = $('amc-groups');
+    if (!host.hasChildNodes()) {
+      PRESET_GROUP_ORDER.forEach(function (label) {
+        var h = document.createElement('h3');
+        h.textContent = label.toUpperCase();
+        host.appendChild(h);
+        var ul = document.createElement('ul');
+        ul.className = 'plist';
+        ul.dataset.group = label;
+        PRESETS.forEach(function (preset) {
+          if (preset.group !== label) { return; }
+          var li = document.createElement('li');
+          li.dataset.preset = preset.id;
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.setAttribute('aria-label', 'Select ' + preset.name);
+          cb.addEventListener('change', function () {
+            state.ticks[preset.id] = cb.checked;
+            syncAddSelected();
+          });
+          var name = document.createElement('button');
+          name.type = 'button';
+          name.className = 'pname';
+          name.textContent = preset.name;
+          name.addEventListener('click', function () { applyPreset(preset); });
+          var val = document.createElement('span');
+          val.className = 'pval';
+          var step = document.createElement('span');
+          step.className = 'step';
+          var minus = document.createElement('button');
+          minus.type = 'button';
+          minus.textContent = '−';
+          minus.setAttribute('aria-label', 'One fewer ' + preset.name);
+          minus.addEventListener('click', function () { setQty(preset.id, qtyFor(preset.id) - 1); });
+          var q = document.createElement('span');
+          q.className = 'qty';
+          var plus = document.createElement('button');
+          plus.type = 'button';
+          plus.textContent = '+';
+          plus.setAttribute('aria-label', 'One more ' + preset.name);
+          plus.addEventListener('click', function () { setQty(preset.id, qtyFor(preset.id) + 1); });
+          step.appendChild(minus);
+          step.appendChild(q);
+          step.appendChild(plus);
+          li.appendChild(cb);
+          li.appendChild(name);
+          li.appendChild(val);
+          li.appendChild(step);
+          ul.appendChild(li);
+        });
+        host.appendChild(ul);
+      });
+    }
+    Array.prototype.forEach.call(host.querySelectorAll('li[data-preset]'), function (li) {
+      var preset = findPreset(li.dataset.preset);
+      if (!preset) { return; }
+      var spot = priceFor(preset.metal);
+      var val = li.querySelector('.pval');
+      var unitValue = spot === null ? null : estimate(spot, preset.weight, preset.unit, preset.purity, 0);
+      val.textContent = unitValue === null ? '—' : fmtUsd(unitValue);
+      li.querySelector('.qty').textContent = String(qtyFor(preset.id));
+      li.querySelector('input[type="checkbox"]').checked = !!state.ticks[preset.id];
+    });
+    syncAddSelected();
+  }
+
+  function qtyFor(id) { return state.qty[id] || 1; }
+  function setQty(id, qty) {
+    state.qty[id] = Math.min(999, Math.max(1, Math.floor(qty) || 1));
+    renderGroups();
+  }
+  function syncAddSelected() {
+    var any = Object.keys(state.ticks).some(function (k) { return state.ticks[k]; });
+    $('amc-add-selected').disabled = !any;
+  }
+
+  function renderCollection() {
     var list = $('amc-items');
     list.innerHTML = '';
     state.collection.forEach(function (item) {
       var li = document.createElement('li');
+      var top = document.createElement('div');
+      top.className = 'top';
       var label = document.createElement('span');
-      label.textContent = item.weight + ' ' + (item.unit === 'g' ? 'g' : 'troy oz') + ' ' + item.metalLabel + ' (' + item.purity + '%)';
+      label.textContent = item.quantity + 'x ' + item.name;
       var right = document.createElement('span');
       var val = document.createElement('b');
-      val.textContent = fmtUsd(item.value);
+      val.textContent = fmtUsd(lineValue(item));
       var rm = document.createElement('button');
       rm.type = 'button';
       rm.textContent = '✕';
-      rm.setAttribute('aria-label', 'Remove from collection');
+      rm.setAttribute('aria-label', 'Remove ' + item.name + ' from collection');
       rm.addEventListener('click', function () {
         state.collection = state.collection.filter(function (x) { return x.id !== item.id; });
-        renderCollection();
+        saveCollection();
+        render();
       });
       right.appendChild(val);
       right.appendChild(rm);
-      li.appendChild(label);
-      li.appendChild(right);
+      top.appendChild(label);
+      top.appendChild(right);
+      var sub = document.createElement('div');
+      sub.className = 'sub';
+      var left = document.createElement('span');
+      left.textContent = metalLabel(item.metal) + ' • ' + linePureOz(item).toFixed(4) + ' ozt pure';
+      var dealer = document.createElement('span');
+      dealer.textContent = 'Dealer ' + fmtUsd(lineValue(item) * DEALER_FACTOR);
+      sub.appendChild(left);
+      sub.appendChild(dealer);
+      li.appendChild(top);
+      li.appendChild(sub);
       list.appendChild(li);
     });
-    renderCollection();
+    var hasItems = state.collection.length > 0;
+    $('amc-empty').hidden = hasItems;
+    $('amc-totals').hidden = !hasItems;
+    if (hasItems) {
+      var total = state.collection.reduce(function (s, x) { return s + lineValue(x); }, 0);
+      $('amc-total').textContent = fmtUsd(total);
+      $('amc-total-dealer').textContent = fmtUsd(total * DEALER_FACTOR);
+    }
   }
 
-  function renderCollection() {
-    var section = $('amc-collection');
-    section.hidden = state.collection.length === 0;
-    var total = state.collection.reduce(function (s, x) { return s + x.value; }, 0);
-    $('amc-total').textContent = fmtUsd(total);
+  function addSelectedToCollection() {
+    var ids = Object.keys(state.ticks).filter(function (k) { return state.ticks[k]; });
+    if (ids.length === 0) { return; }
+    var added = 0;
+    ids.forEach(function (id) {
+      var preset = findPreset(id);
+      if (!preset) { return; }
+      var spot = priceFor(preset.metal);
+      if (spot === null) { return; }
+      var qty = qtyFor(id);
+      var unitValue = estimate(spot, preset.weight, preset.unit, preset.purity, 0);
+      var existing = null;
+      state.collection.forEach(function (line) {
+        if (line.presetId === preset.id && line.premium === 0) { existing = line; }
+      });
+      if (existing) {
+        existing.quantity += qty;
+      } else {
+        state.collection.push({
+          id: 'n' + (state.nextId++),
+          presetId: preset.id,
+          name: preset.name,
+          metal: preset.metal,
+          weight: preset.weight,
+          unit: preset.unit,
+          purity: preset.purity,
+          premium: 0,
+          quantity: qty,
+          unitValueSnapshot: unitValue
+        });
+      }
+      added += qty;
+    });
+    state.ticks = {};
+    saveCollection();
+    render();
+    $('amc-add-selected').textContent = added === 1 ? 'Added 1 item ✓' : 'Added ' + added + ' items ✓';
+    setTimeout(function () { $('amc-add-selected').textContent = 'Add selected to my collection'; }, 2000);
   }
 
-  function metalLabel(key) {
-    return { silver: 'Silver', gold: 'Gold', platinum: 'Platinum', palladium: 'Palladium', rhodium: 'Rhodium' }[key];
+  function buildStatic() {
+    var tabs = $('amc-tabs');
+    METALS.forEach(function (m) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = m.label;
+      b.dataset.metal = m.key;
+      b.addEventListener('click', function () {
+        state.metal = m.key;
+        markManual();
+        render();
+      });
+      tabs.appendChild(b);
+    });
+
+    var presetSel = $('amc-preset');
+    PRESETS.forEach(function (preset) {
+      var o = document.createElement('option');
+      o.value = preset.id;
+      o.textContent = preset.name;
+      presetSel.appendChild(o);
+    });
+    presetSel.value = 'custom-item';
+    presetSel.addEventListener('change', function () {
+      var preset = findPreset(presetSel.value);
+      if (preset) { applyPreset(preset); }
+    });
+
+    var picker = $('amc-picker');
+    var custom = document.createElement('option');
+    custom.value = 'custom';
+    custom.textContent = 'Custom';
+    picker.appendChild(custom);
+    PURITY_GROUPS.forEach(function (group) {
+      var og = document.createElement('optgroup');
+      og.label = group.label;
+      group.options.forEach(function (opt) {
+        var o = document.createElement('option');
+        o.value = purityKey(opt);
+        o.textContent = opt.label + ' — ' + opt.name + ' (' + fmtPurity(opt.purity) + '%)';
+        og.appendChild(o);
+      });
+      picker.appendChild(og);
+    });
+    picker.value = 'custom';
+    picker.addEventListener('change', function () {
+      if (picker.value === 'custom') { return; }
+      var parts = picker.value.split(':');
+      var parsed = parseFloat(parts[1]);
+      if (isFinite(parsed)) {
+        $('amc-purity').value = fmtPurity(parsed);
+        markManual();
+        render();
+      }
+    });
   }
 
   function bind() {
-    $('amc-weight').addEventListener('input', render);
-    $('amc-purity').addEventListener('input', render);
+    $('amc-weight').addEventListener('input', function () { markManual(); render(); });
+    $('amc-purity').addEventListener('input', function () { markManual(); render(); });
     $('amc-premium').addEventListener('input', function (e) {
       state.premium = parseFloat(e.target.value) || 0;
       $('amc-premium-val').textContent = state.premium.toFixed(1) + '%';
+      markManual();
       render();
     });
     $('amc-unit-oz').addEventListener('click', function () {
-      state.unit = 'oz';
-      $('amc-unit-oz').classList.add('active');
-      $('amc-unit-g').classList.remove('active');
+      setUnit('oz');
+      markManual();
       render();
     });
     $('amc-unit-g').addEventListener('click', function () {
-      state.unit = 'g';
-      $('amc-unit-g').classList.add('active');
-      $('amc-unit-oz').classList.remove('active');
+      setUnit('g');
+      markManual();
       render();
+    });
+    $('amc-refresh').addEventListener('click', function () {
+      state.loading = true;
+      state.error = false;
+      render();
+      loadPrices();
     });
     $('amc-retry').addEventListener('click', function () {
       state.loading = true;
@@ -419,16 +935,32 @@
     $('amc-add').addEventListener('click', function () {
       var value = currentValue();
       if (value === null) { return; }
+      var unitLabel = state.unit === 'g' ? 'g' : 'troy oz';
+      var w = parseFloat($('amc-weight').value);
+      var p = parseFloat($('amc-purity').value);
+      var preset = findPreset(state.presetId);
+      var name = preset && preset.id !== 'custom-item'
+        ? preset.name
+        : w + ' ' + unitLabel + ' ' + metalLabel(state.metal) + ' (' + fmtPurity(p) + '%)';
       state.collection.push({
-        id: state.nextId++,
+        id: 'n' + (state.nextId++),
+        presetId: preset && preset.id !== 'custom-item' ? preset.id : null,
+        name: name,
         metal: state.metal,
-        metalLabel: metalLabel(state.metal),
-        weight: parseFloat($('amc-weight').value),
+        weight: w,
         unit: state.unit,
-        purity: parseFloat($('amc-purity').value),
+        purity: p,
         premium: state.premium,
-        value: value
+        quantity: 1,
+        unitValueSnapshot: value
       });
+      saveCollection();
+      render();
+    });
+    $('amc-add-selected').addEventListener('click', addSelectedToCollection);
+    $('amc-clear').addEventListener('click', function () {
+      state.collection = [];
+      saveCollection();
       render();
     });
     $('amc-copy').addEventListener('click', function () {
@@ -436,7 +968,7 @@
       if (value === null) { return; }
       var unitLabel = state.unit === 'g' ? 'g' : 'troy oz';
       var summary = 'My ' + parseFloat($('amc-weight').value) + ' ' + unitLabel + ' of ' +
-        metalLabel(state.metal) + ' (' + parseFloat($('amc-purity').value) + '% pure) is worth about ' +
+        metalLabel(state.metal) + ' (' + fmtPurity(parseFloat($('amc-purity').value)) + '% pure) is worth about ' +
         fmtUsd(value) + ' (' + fmtUsd(value * DEALER_FACTOR) + ' dealer price). ' +
         'Estimated with Agate Metals Checker — estimates only, not financial advice.';
       var done = function (ok) {
@@ -447,8 +979,29 @@
         navigator.clipboard.writeText(summary).then(function () { done(true); }, function () { done(false); });
       } else { done(false); }
     });
+    $('amc-copy-collection').addEventListener('click', function () {
+      if (state.collection.length === 0) { return; }
+      var lines = state.collection.map(function (item) {
+        return '- ' + item.quantity + 'x ' + item.name + ' — ' + metalLabel(item.metal) +
+          ', ' + linePureOz(item).toFixed(4) + ' ozt pure, ' + fmtUsd(lineValue(item)) +
+          ' (' + fmtUsd(lineValue(item) * DEALER_FACTOR) + ' dealer)';
+      });
+      var total = state.collection.reduce(function (s, x) { return s + lineValue(x); }, 0);
+      var summary = 'My collection — Agate Metals Checker (estimates only, not financial advice):\n' +
+        lines.join('\n') + '\nTotal: ' + fmtUsd(total) +
+        ' (' + fmtUsd(total * DEALER_FACTOR) + ' dealer price)';
+      var done = function (ok) {
+        $('amc-copy-collection').textContent = ok ? 'Copied!' : 'Copy failed — select the text manually';
+        setTimeout(function () { $('amc-copy-collection').textContent = 'Copy collection summary'; }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(summary).then(function () { done(true); }, function () { done(false); });
+      } else { done(false); }
+    });
   }
 
+  buildStatic();
+  loadCollection();
   bind();
   render();
   loadPrices();

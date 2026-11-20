@@ -15,12 +15,21 @@ November 20, 2026.
 
 - **Entry point:** subreddit "•••" menu → "Create a new post" (moderators).
   The post opens the calculator full-screen.
-- **Calculator:** pick a metal, enter a weight and unit (troy oz / gram), set
-  purity % and a dealer premium slider. Outputs: Estimated Value and
-  Estimated Dealer Price (95% of the value).
-- **Collection:** add pieces to a collection and see the running total.
-- **Sharing:** share a result as a new post, or copy a summary to paste
-  anywhere on Reddit.
+- **Calculator:** pick a product from the dropdown (30 live presets in
+  exact order + Joe's 7 additions, Custom Item by default), or pick a metal,
+  enter a weight and unit (troy oz / gram), set purity % via the field or
+  the 24-option purity picker, and a dealer premium slider. Outputs:
+  Estimated Value, fine weight in troy oz, and Estimated Dealer Price (95%
+  of the value — "Reference at 95% of calculated metal value").
+- **Collection:** tick products in Common Products (with quantities) and add
+  them all in one tap, or add the calculator result. Per-line remove,
+  clear-all, running total + dealer total, copy/share on the total. Saved
+  per-user in Redis (`collection:<user id>`, LOID fallback) with a "✓ Saved"
+  indicator; loads back on open.
+- **Sharing:** share a result — or the whole collection total — as a new
+  post, or copy a summary to paste anywhere on Reddit.
+- **Theme:** white / light, matching the live app (black selected tab,
+  pure-black value panel, grey circular metal badge, Refresh price button).
 
 ## Price fallback chain (per metal, in order)
 
@@ -33,8 +42,37 @@ November 20, 2026.
    them from the subreddit menu ("Update fallback prices") — no new upload
    needed. Seeded on install with the Nov 20, 2026 reference prices.
 
+> ⚠️ **Rhodium — stale fallback:** the seeded rhodium reference price is
+> $4,500/ozt, a late-2024 level; the Nov 20, 2026 market is roughly
+> $8,200–$9,400/ozt, so the app undervalues rhodium by about half until a
+> moderator updates it or a metalpriceapi.com key adds a live rhodium leg.
+> The UI always labels rhodium a "Reference price" with a stale-price note,
+> never as live.
+
 Prices are cached server-side for 60 seconds and refreshed on the same
 interval in the client.
+
+## Presets, purity picker, and collection (0.0.52, Nov 20, 2026)
+
+- Preset + purity data live in one table: `src/shared/presets.ts`
+  (`PRESETS`, `PURITY_GROUPS`, collection-line helpers). The standalone
+  mirrors it with its own `PRESETS` / `PURITY_GROUPS` arrays.
+- 90%/40%/35% silver items store the **pure-silver weight at 100% purity**
+  (dime 0.0723 ozt @ 100%), not gross weight + alloy purity — that is the
+  live app's own convention (docs/product-purity-table.json).
+- The premium slider stays 0.0% for ALL presets. Custom Item never resets
+  anything. Fresh load: Custom Item + Silver, 1, Troy Oz, 99.9%, 0.0%.
+- Collection API: `GET /api/collection`, `PUT /api/collection`,
+  `DELETE /api/collection` (server `src/server/collection.ts`, per-user
+  Redis key). Share accepts an optional `title` override for collection
+  totals.
+- Tests: `src/shared/presets.test.ts` — hand-computed live-number,
+  table-price, collection-total, and coverage checks. Run bundled (the
+  repo's `test:unit` script cannot resolve the codebase's extensionless
+  imports under `--experimental-strip-types`):
+  `esbuild src/shared/presets.test.ts --bundle --platform=node --format=esm
+--outfile=/tmp/checker-presets.test.mjs && node /tmp/checker-presets.test.mjs`
+  (also runnable as `node --test` on the bundle).
 
 ## Fixes vs the original (0.0.51)
 
