@@ -1,0 +1,459 @@
+<!doctype html>
+<!--
+  Agate Metals Checker — standalone embeddable calculator
+  =======================================================
+  A single self-contained HTML file (no dependencies, no build step).
+  Drop it onto any web page as-is, or embed it in an <iframe>.
+
+  HOW TO EMBED
+  1. Save this file on your site (e.g. /agate-metals-checker.html) and
+     link to it, or paste its contents into an <iframe src="...">.
+  2. No API key is needed. Prices come from gold-api.com first, then
+     Yahoo Finance, then the built-in reference prices below.
+  3. Optional: set METALPRICEAPI_KEY to enable the metalpriceapi.com leg
+     (the only live source here that covers rhodium). Leave it empty to
+     skip that leg — the app works fine without it.
+
+  NOTES
+  - Yahoo Finance does not send CORS headers, so browsers usually block
+    that leg. gold-api.com does allow browser requests, so it carries the
+    live prices in practice. The chain is kept in the documented order
+    (gold-api → Yahoo → metalpriceapi → built-in reference) and any leg
+    that fails is skipped silently.
+  - Built-in reference prices are the verified Nov 20, 2026 values. They
+    only show when every live leg fails. Update them when they go stale.
+  - Rhodium has no free live source in this file: gold-api.com and Yahoo
+    Finance do not cover it. It uses metalpriceapi (if a key is set) or
+    the built-in reference price below.
+  - All figures are estimates only — not quotes, not financial advice.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agate Metals Checker — What's your metal worth?</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0a1a2e; color: #fff; }
+  .amc { max-width: 560px; margin: 0 auto; padding: 16px; min-height: 100vh; display: flex; flex-direction: column; }
+  .amc header { text-align: center; }
+  .amc .kicker { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.25em; color: #d4af37; margin: 0; }
+  .amc h1 { font-size: 1.5rem; line-height: 1.2; margin: 6px 0 0; }
+  .amc .ticker { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; padding: 8px 16px; border: 1px solid rgba(212,175,55,.4); border-radius: 999px; background: rgba(255,255,255,.05); }
+  .amc .ticker .price { font-size: 1.1rem; font-weight: 700; color: #d4af37; }
+  .amc .ticker .badge { background: #d4af37; color: #0a1a2e; border-radius: 999px; padding: 2px 8px; font-size: 0.65rem; font-weight: 700; }
+  .amc .updated { font-size: 0.72rem; color: rgba(255,255,255,.6); margin: 6px 0 0; }
+  .amc .tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; background: rgba(255,255,255,.1); border-radius: 999px; padding: 4px; margin-top: 20px; }
+  .amc .tabs button { cursor: pointer; border: 0; border-radius: 999px; padding: 8px 2px; font-size: 0.8rem; font-weight: 600; background: transparent; color: rgba(255,255,255,.8); }
+  .amc .tabs button.active { background: #d4af37; color: #0a1a2e; }
+  .amc .card { background: #fff; color: #0a1a2e; border-radius: 16px; padding: 16px; margin-top: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+  .amc .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .amc label { display: block; }
+  .amc .lbl { font-size: 0.72rem; font-weight: 700; letter-spacing: .05em; color: #64748b; }
+  .amc input[type="number"] { width: 100%; margin-top: 4px; padding: 8px 12px; font-size: 1.1rem; font-weight: 600; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; }
+  .amc input[type="number"]:focus { border-color: #d4af37; }
+  .amc .unit { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: #f1f5f9; border-radius: 8px; padding: 4px; margin-top: 4px; }
+  .amc .unit button { cursor: pointer; border: 0; border-radius: 6px; padding: 8px 4px; font-size: 0.85rem; font-weight: 600; background: transparent; color: #475569; }
+  .amc .unit button.active { background: #0a1a2e; color: #fff; }
+  .amc .field { margin-top: 12px; }
+  .amc input[type="range"] { width: 100%; accent-color: #d4af37; }
+  .amc .range-lbl { display: flex; justify-content: space-between; font-size: 0.72rem; font-weight: 700; letter-spacing: .05em; color: #64748b; }
+  .amc .range-lbl b { color: #0a1a2e; }
+  .amc .range-minmax { display: flex; justify-content: space-between; font-size: 0.7rem; color: #94a3b8; }
+  .amc .result { background: #0a1a2e; color: #fff; border-radius: 12px; padding: 16px; text-align: center; margin-top: 16px; }
+  .amc .result .cap { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2em; color: #d4af37; }
+  .amc .result .big { font-size: 1.9rem; font-weight: 700; margin-top: 4px; }
+  .amc .result .cap2 { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.2em; color: rgba(255,255,255,.6); margin-top: 10px; }
+  .amc .result .dealer { font-size: 1.25rem; font-weight: 600; color: #d4af37; }
+  .amc .result .note { font-size: 0.7rem; color: rgba(255,255,255,.6); margin: 8px 0 0; }
+  .amc .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .amc .actions button { cursor: pointer; border-radius: 999px; padding: 10px 12px; font-size: 0.85rem; font-weight: 700; }
+  .amc .actions .gold { background: #d4af37; color: #0a1a2e; border: 0; }
+  .amc .actions .outline { background: #fff; color: #0a1a2e; border: 2px solid #0a1a2e; }
+  .amc .actions button:disabled { opacity: .5; cursor: default; }
+  .amc .copy { width: 100%; margin-top: 8px; background: none; border: 0; cursor: pointer; color: #64748b; font-size: 0.85rem; font-weight: 600; text-decoration: underline; }
+  .amc .copy:disabled { opacity: .5; cursor: default; }
+  .amc .collection { background: #fff; color: #0a1a2e; border-radius: 16px; padding: 16px; margin-top: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+  .amc .collection h2 { font-size: 0.85rem; letter-spacing: .05em; margin: 0; }
+  .amc .collection ul { list-style: none; margin: 8px 0 0; padding: 0; }
+  .amc .collection li { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #f1f5f9; border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; margin-top: 8px; }
+  .amc .collection li b { white-space: nowrap; }
+  .amc .collection li button { cursor: pointer; border: 0; border-radius: 999px; background: #cbd5e1; padding: 2px 8px; font-weight: 700; }
+  .amc .collection .total { display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; margin-top: 12px; padding-top: 8px; font-weight: 700; }
+  .amc .error { margin-top: 16px; border: 1px solid rgba(248,113,113,.5); background: rgba(239,68,68,.1); border-radius: 12px; padding: 16px; text-align: center; }
+  .amc .error button { cursor: pointer; margin-top: 12px; background: #d4af37; color: #0a1a2e; border: 0; border-radius: 999px; padding: 8px 16px; font-weight: 700; }
+  .amc footer { margin-top: 20px; padding-bottom: 8px; text-align: center; font-size: 0.72rem; line-height: 1.6; color: rgba(255,255,255,.6); }
+  .amc footer a { color: rgba(255,255,255,.8); }
+  .amc .skeleton { height: 40px; border-radius: 8px; background: #e2e8f0; animation: amc-pulse 1.2s ease-in-out infinite; margin-top: 12px; }
+  @keyframes amc-pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+</style>
+</head>
+<body>
+<div class="amc" id="amc">
+  <header>
+    <p class="kicker">AGATE METALS • LIVE REFERENCE</p>
+    <h1>Know what your bullion is worth</h1>
+    <div class="ticker"><span class="price" id="amc-header-price">Loading live prices…</span><span class="badge" id="amc-header-source">…</span></div>
+    <p class="updated" id="amc-updated">Updated — • Refreshes every 60 seconds</p>
+  </header>
+
+  <nav class="tabs" id="amc-tabs" aria-label="Metal"></nav>
+
+  <div class="error" id="amc-error" hidden>
+    <b>Couldn’t load live prices</b>
+    <p style="margin:6px 0 0;font-size:.85rem">Check your connection and try again. Reference prices may still be available once the page reconnects.</p>
+    <button id="amc-retry" type="button">Try again</button>
+  </div>
+
+  <section class="card" id="amc-calc">
+    <div id="amc-loading">
+      <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+    </div>
+    <div id="amc-form" hidden>
+      <div class="row">
+        <label><span class="lbl">WEIGHT</span>
+          <input type="number" id="amc-weight" min="0" step="any" value="1" inputmode="decimal" />
+        </label>
+        <div><span class="lbl">UNIT</span>
+          <div class="unit">
+            <button type="button" id="amc-unit-oz" class="active">Troy Oz</button>
+            <button type="button" id="amc-unit-g">Gram</button>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label><span class="lbl">PURITY %</span>
+          <input type="number" id="amc-purity" min="0" max="100" step="0.1" value="99.9" inputmode="decimal" />
+        </label>
+      </div>
+      <div class="field">
+        <div class="range-lbl"><span>DEALER PREMIUM</span><b id="amc-premium-val">0.0%</b></div>
+        <input type="range" id="amc-premium" min="0" max="50" step="0.5" value="0" />
+        <div class="range-minmax"><span>0% (melt value)</span><span>50%</span></div>
+      </div>
+      <div class="result">
+        <p class="cap" style="margin:0">ESTIMATED VALUE</p>
+        <p class="big" id="amc-value" style="margin:4px 0 0">—</p>
+        <p class="cap2" style="margin:10px 0 0">ESTIMATED DEALER PRICE (95%)</p>
+        <p class="dealer" id="amc-dealer" style="margin:0">—</p>
+        <p class="note" id="amc-note"></p>
+      </div>
+      <div class="actions">
+        <button type="button" class="gold" id="amc-add">+ Add to collection</button>
+        <button type="button" class="outline" id="amc-copy">Copy summary</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="collection" id="amc-collection" hidden>
+    <h2>MY COLLECTION</h2>
+    <ul id="amc-items"></ul>
+    <p class="total"><span>Collection total</span><span id="amc-total"></span></p>
+  </section>
+
+  <footer>
+    <p style="margin:0">All figures are estimates based on live reference prices — not quotes, and not financial advice.</p>
+    <p style="margin:8px 0 0">
+      <a href="https://agatepreciousmetals.com/terms.html" target="_blank" rel="noopener">Terms</a>
+      &nbsp;•&nbsp; <a href="https://agatepreciousmetals.com/privacy.html" target="_blank" rel="noopener">Privacy</a>
+      &nbsp;•&nbsp; <a href="https://agatemetals.com/" target="_blank" rel="noopener">agatemetals.com</a>
+      &nbsp;•&nbsp; <a href="https://bullionpricecheck.com/" target="_blank" rel="noopener">Bullion Price Check</a>
+    </p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // Optional metalpriceapi.com key. Leave empty to skip that leg.
+  var METALPRICEAPI_KEY = '';
+
+  var TROY_OZ_GRAMS = 31.1034768;
+  var DEALER_FACTOR = 0.95;
+
+  // Built-in reference prices (USD per troy oz), verified Nov 20, 2026.
+  // Used ONLY when every live leg fails. Update them when they go stale.
+  var REFERENCE_PRICES = {
+    gold: 3559.17,
+    silver: 41.88,
+    platinum: 1303.20,
+    palladium: 888.25,
+    rhodium: null
+  };
+
+  var METALS = [
+    { key: 'silver', label: 'Silver', code: 'XAG', yahoo: 'SI=F' },
+    { key: 'gold', label: 'Gold', code: 'XAU', yahoo: 'GC=F' },
+    { key: 'platinum', label: 'Platinum', code: 'XPT', yahoo: 'PL=F' },
+    { key: 'palladium', label: 'Palladium', code: 'XPD', yahoo: 'PA=F' },
+    { key: 'rhodium', label: 'Rhodium', code: 'XRH', yahoo: null }
+  ];
+
+  var state = {
+    metal: 'gold',
+    unit: 'oz',
+    premium: 0,
+    prices: null, // { key: { price, source, updatedAt } }
+    fetchedAt: null,
+    loading: true,
+    error: false,
+    collection: [],
+    nextId: 1
+  };
+
+  function $(id) { return document.getElementById(id); }
+
+  function fmtUsd(v) {
+    return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function fetchJson(url, timeoutMs) {
+    return new Promise(function (resolve) {
+      var done = false;
+      var timer = setTimeout(function () { if (!done) { done = true; resolve(null); } }, timeoutMs || 5000);
+      fetch(url, { headers: { 'Accept': 'application/json' } })
+        .then(function (res) { if (!res.ok) { throw new Error('http ' + res.status); } return res.json(); })
+        .then(function (data) { if (!done) { done = true; clearTimeout(timer); resolve(data); } })
+        .catch(function () { if (!done) { done = true; clearTimeout(timer); resolve(null); } });
+    });
+  }
+
+  function yahooPrice(symbol) {
+    return fetchJson('https://query1.finance.yahoo.com/v8/finance/chart/' + symbol + '?range=1d&interval=1m')
+      .then(function (data) {
+        try {
+          var p = data.chart.result[0].meta.regularMarketPrice;
+          return (typeof p === 'number' && isFinite(p)) ? p : null;
+        } catch (e) { return null; }
+      });
+  }
+
+  function goldApiPrice(code) {
+    return fetchJson('https://api.gold-api.com/price/' + code)
+      .then(function (data) {
+        return (data && typeof data.price === 'number' && isFinite(data.price)) ? data.price : null;
+      });
+  }
+
+  function metalPriceApiPrices() {
+    if (!METALPRICEAPI_KEY) { return Promise.resolve({}); }
+    return fetchJson('https://api.metalpriceapi.com/v1/latest?api_key=' + encodeURIComponent(METALPRICEAPI_KEY) + '&base=USD&currencies=XAU,XAG,XPT,XPD,XRH')
+      .then(function (data) {
+        if (!data || data.success !== true || !data.rates) { return {}; }
+        var out = {};
+        var byCode = { XAG: 'silver', XAU: 'gold', XPT: 'platinum', XPD: 'palladium', XRH: 'rhodium' };
+        Object.keys(byCode).forEach(function (code) {
+          var v = data.rates[code];
+          if (typeof v === 'number' && isFinite(v)) { out[byCode[code]] = v; }
+        });
+        return out;
+      });
+  }
+
+  // Price chain per metal: gold-api → Yahoo → metalpriceapi (if key) → built-in reference.
+  // (Yahoo usually fails in browsers because it sends no CORS headers; the
+  // chain keeps the documented order and skips any leg that fails.)
+  function loadPrices() {
+    return metalPriceApiPrices().then(function (mpa) {
+      var jobs = METALS.map(function (m) {
+        return goldApiPrice(m.code).then(function (price) {
+          if (price !== null) { return { key: m.key, price: price, source: 'gold-api' }; }
+          if (!m.yahoo) { return nextLeg(m, mpa); }
+          return yahooPrice(m.yahoo).then(function (yp) {
+            if (yp !== null) { return { key: m.key, price: yp, source: 'yahoo' }; }
+            return nextLeg(m, mpa);
+          });
+        });
+      });
+      return Promise.all(jobs).then(function (results) {
+        var prices = {};
+        var fetchedAt = new Date().toISOString();
+        results.forEach(function (r) {
+          prices[r.key] = { price: r.price, source: r.source, updatedAt: r.price === null ? null : fetchedAt };
+        });
+        state.prices = prices;
+        state.fetchedAt = fetchedAt;
+        state.loading = false;
+        state.error = false;
+        render();
+      });
+    }).catch(function () {
+      state.loading = false;
+      state.error = true;
+      render();
+    });
+  }
+
+  function nextLeg(m, mpa) {
+    if (mpa[m.key] !== undefined) { return { key: m.key, price: mpa[m.key], source: 'metalpriceapi' }; }
+    var ref = REFERENCE_PRICES[m.key];
+    if (typeof ref === 'number') { return { key: m.key, price: ref, source: 'reference' }; }
+    return { key: m.key, price: null, source: 'none' };
+  }
+
+  function toTroyOz(weight, unit) { return unit === 'g' ? weight / TROY_OZ_GRAMS : weight; }
+
+  function currentValue() {
+    if (!state.prices) { return null; }
+    var entry = state.prices[state.metal];
+    if (!entry || entry.price === null) { return null; }
+    var w = parseFloat($('amc-weight').value);
+    var p = parseFloat($('amc-purity').value);
+    if (!isFinite(w) || w <= 0 || !isFinite(p) || p <= 0 || p > 100) { return null; }
+    return entry.price * toTroyOz(w, state.unit) * (p / 100) * (1 + state.premium / 100);
+  }
+
+  function render() {
+    var entry = state.prices ? state.prices[state.metal] : null;
+    var headerPrice = $('amc-header-price');
+    var headerSource = $('amc-header-source');
+    if (state.loading && !state.prices) {
+      headerPrice.textContent = 'Loading live prices…';
+      headerSource.textContent = '…';
+    } else if (entry && entry.price !== null) {
+      var label = { silver: 'Silver', gold: 'Gold', platinum: 'Platinum', palladium: 'Palladium', rhodium: 'Rhodium' }[state.metal];
+      headerPrice.textContent = label + ' ' + fmtUsd(entry.price) + ' / oz';
+      headerSource.textContent = entry.source === 'reference' ? 'Reference price' : 'Live';
+    } else {
+      headerPrice.textContent = { silver: 'Silver', gold: 'Gold', platinum: 'Platinum', palladium: 'Palladium', rhodium: 'Rhodium' }[state.metal] + ' — no live price';
+      headerSource.textContent = 'Unavailable';
+    }
+    $('amc-updated').textContent = 'Updated ' + (state.fetchedAt ? new Date(state.fetchedAt).toLocaleTimeString('en-US', { hour12: false }) : '—') + ' • Refreshes every 60 seconds';
+
+    $('amc-error').hidden = !(state.error && !state.prices);
+    $('amc-loading').hidden = !(state.loading && !state.prices);
+    $('amc-form').hidden = state.loading && !state.prices;
+
+    var value = currentValue();
+    $('amc-value').textContent = value === null ? '—' : fmtUsd(value);
+    $('amc-dealer').textContent = value === null ? '—' : fmtUsd(value * DEALER_FACTOR);
+    var note = '';
+    if (entry && entry.source === 'reference') {
+      note = 'Showing a built-in reference price — live sources are unavailable right now.';
+    } else if (entry && entry.price === null) {
+      note = 'No live price for this metal right now — a reference price has not been set.';
+    }
+    $('amc-note').textContent = note;
+    $('amc-add').disabled = value === null;
+    $('amc-copy').disabled = value === null;
+
+    var tabs = $('amc-tabs');
+    if (!tabs.hasChildNodes()) {
+      METALS.forEach(function (m) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = m.label;
+        b.dataset.metal = m.key;
+        b.addEventListener('click', function () { state.metal = m.key; render(); });
+        tabs.appendChild(b);
+      });
+    }
+    Array.prototype.forEach.call(tabs.children, function (b) {
+      b.classList.toggle('active', b.dataset.metal === state.metal);
+    });
+
+    var list = $('amc-items');
+    list.innerHTML = '';
+    state.collection.forEach(function (item) {
+      var li = document.createElement('li');
+      var label = document.createElement('span');
+      label.textContent = item.weight + ' ' + (item.unit === 'g' ? 'g' : 'troy oz') + ' ' + item.metalLabel + ' (' + item.purity + '%)';
+      var right = document.createElement('span');
+      var val = document.createElement('b');
+      val.textContent = fmtUsd(item.value);
+      var rm = document.createElement('button');
+      rm.type = 'button';
+      rm.textContent = '✕';
+      rm.setAttribute('aria-label', 'Remove from collection');
+      rm.addEventListener('click', function () {
+        state.collection = state.collection.filter(function (x) { return x.id !== item.id; });
+        renderCollection();
+      });
+      right.appendChild(val);
+      right.appendChild(rm);
+      li.appendChild(label);
+      li.appendChild(right);
+      list.appendChild(li);
+    });
+    renderCollection();
+  }
+
+  function renderCollection() {
+    var section = $('amc-collection');
+    section.hidden = state.collection.length === 0;
+    var total = state.collection.reduce(function (s, x) { return s + x.value; }, 0);
+    $('amc-total').textContent = fmtUsd(total);
+  }
+
+  function metalLabel(key) {
+    return { silver: 'Silver', gold: 'Gold', platinum: 'Platinum', palladium: 'Palladium', rhodium: 'Rhodium' }[key];
+  }
+
+  function bind() {
+    $('amc-weight').addEventListener('input', render);
+    $('amc-purity').addEventListener('input', render);
+    $('amc-premium').addEventListener('input', function (e) {
+      state.premium = parseFloat(e.target.value) || 0;
+      $('amc-premium-val').textContent = state.premium.toFixed(1) + '%';
+      render();
+    });
+    $('amc-unit-oz').addEventListener('click', function () {
+      state.unit = 'oz';
+      $('amc-unit-oz').classList.add('active');
+      $('amc-unit-g').classList.remove('active');
+      render();
+    });
+    $('amc-unit-g').addEventListener('click', function () {
+      state.unit = 'g';
+      $('amc-unit-g').classList.add('active');
+      $('amc-unit-oz').classList.remove('active');
+      render();
+    });
+    $('amc-retry').addEventListener('click', function () {
+      state.loading = true;
+      state.error = false;
+      render();
+      loadPrices();
+    });
+    $('amc-add').addEventListener('click', function () {
+      var value = currentValue();
+      if (value === null) { return; }
+      state.collection.push({
+        id: state.nextId++,
+        metal: state.metal,
+        metalLabel: metalLabel(state.metal),
+        weight: parseFloat($('amc-weight').value),
+        unit: state.unit,
+        purity: parseFloat($('amc-purity').value),
+        premium: state.premium,
+        value: value
+      });
+      render();
+    });
+    $('amc-copy').addEventListener('click', function () {
+      var value = currentValue();
+      if (value === null) { return; }
+      var unitLabel = state.unit === 'g' ? 'g' : 'troy oz';
+      var summary = 'My ' + parseFloat($('amc-weight').value) + ' ' + unitLabel + ' of ' +
+        metalLabel(state.metal) + ' (' + parseFloat($('amc-purity').value) + '% pure) is worth about ' +
+        fmtUsd(value) + ' (' + fmtUsd(value * DEALER_FACTOR) + ' dealer price). ' +
+        'Estimated with Agate Metals Checker — estimates only, not financial advice.';
+      var done = function (ok) {
+        $('amc-copy').textContent = ok ? 'Copied!' : 'Copy failed — select the text manually';
+        setTimeout(function () { $('amc-copy').textContent = 'Copy summary'; }, 2000);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(summary).then(function () { done(true); }, function () { done(false); });
+      } else { done(false); }
+    });
+  }
+
+  bind();
+  render();
+  loadPrices();
+  setInterval(loadPrices, 60000);
+})();
+</script>
+</body>
+</html>

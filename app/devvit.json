@@ -1,0 +1,53 @@
+{
+  "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+  "forms": { "fallbackPricesForm": "/internal/form/fallback-prices-submit" },
+  "menu": {
+    "items": [
+      {
+        "description": "Agate Metals Checker",
+        "endpoint": "/internal/menu/post-create",
+        "forUserType": "moderator",
+        "label": "Create a new post",
+        "location": "subreddit"
+      },
+      {
+        "description": "Set daily reference prices for gold, silver, platinum, palladium and rhodium",
+        "endpoint": "/internal/menu/fallback-prices",
+        "forUserType": "moderator",
+        "label": "Update fallback prices",
+        "location": "subreddit"
+      }
+    ]
+  },
+  "name": "agatemetals",
+  "permissions": {
+    "http": {
+      "domains": [
+        "finance.yahoo.com",
+        "api.metalpriceapi.com",
+        "api.gold-api.com"
+      ],
+      "enable": true
+    }
+  },
+  "post": {
+    "dir": "dist/client",
+    "entrypoints": {
+      "default": { "entry": "splash.html", "inline": true },
+      "game": { "entry": "game.html" }
+    }
+  },
+  "scripts": { "build": "vite build", "dev": "vite build --watch" },
+  "server": { "dir": "dist/server", "entry": "index.cjs" },
+  "settings": {
+    "global": {
+      "metalpriceapi_key": {
+        "helpText": "Optional API key for api.metalpriceapi.com — the middle leg of the price fallback chain. Without it the app uses Yahoo Finance and gold-api.com first, then moderator reference prices.",
+        "isSecret": true,
+        "label": "Metal Price API key (optional)",
+        "type": "string"
+      }
+    }
+  },
+  "triggers": { "onAppInstall": "/internal/triggers/on-app-install" }
+}
